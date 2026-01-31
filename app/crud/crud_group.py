@@ -22,7 +22,13 @@ async def create_group(db: AsyncSession, group: GroupCreate, owner_id: int) -> G
     db.add(db_member)
     await db.commit()
     
-    return db_group
+    # Re-fetch with members loaded to satisfy response schema
+    result = await db.execute(
+        select(Group)
+        .options(selectinload(Group.members))
+        .where(Group.id == db_group.id)
+    )
+    return result.scalars().first()
 
 async def get_multi_by_owner(db: AsyncSession, owner_id: int, skip: int = 0, limit: int = 100) -> List[Group]:
     # This gets groups the user belongs to.
