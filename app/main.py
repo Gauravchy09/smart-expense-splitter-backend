@@ -9,30 +9,35 @@ from app.db.base_class import Base
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Create tables on startup
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        
-        # Manual migration for category column if it doesn't exist
-        from sqlalchemy import text
-        await conn.execute(text("""
-            DO $$ 
-            BEGIN 
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                             WHERE table_name='expense' AND column_name='category') THEN 
-                    ALTER TABLE expense ADD COLUMN category VARCHAR DEFAULT 'Others' NOT NULL;
-                END IF; 
-                
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                             WHERE table_name='group' AND column_name='base_currency') THEN 
-                    ALTER TABLE "group" ADD COLUMN base_currency VARCHAR DEFAULT 'USD' NOT NULL;
-                END IF;
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+            
+            # Manual migration for category column if it doesn't exist
+            from sqlalchemy import text
+            await conn.execute(text("""
+                DO $$ 
+                BEGIN 
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                 WHERE table_name='expense' AND column_name='category') THEN 
+                        ALTER TABLE expense ADD COLUMN category VARCHAR DEFAULT 'Others' NOT NULL;
+                    END IF; 
+                    
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                 WHERE table_name='group' AND column_name='base_currency') THEN 
+                        ALTER TABLE "group" ADD COLUMN base_currency VARCHAR DEFAULT 'USD' NOT NULL;
+                    END IF;
 
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                             WHERE table_name='settlement' AND column_name='currency') THEN 
-                    ALTER TABLE settlement ADD COLUMN currency VARCHAR DEFAULT 'USD' NOT NULL;
-                END IF;
-            END $$;
-        """))
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                 WHERE table_name='settlement' AND column_name='currency') THEN 
+                        ALTER TABLE settlement ADD COLUMN currency VARCHAR DEFAULT 'USD' NOT NULL;
+                    END IF;
+                END $$;
+            """))
+    except Exception as e:
+        import logging
+        logging.error(f"Startup DB connection failed: {e}")
+        # preventing crash so /health still works
     yield
 
 app = FastAPI(
